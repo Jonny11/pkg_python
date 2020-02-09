@@ -4,10 +4,11 @@ from .pymonad_types import * # <-- mypy typecheck doesn't seem to work with exte
                             #     copied pymonad content to a local file as temporary solution
 import pandas as pd
 import numpy as np
+from pandas import DataFrame
 
 # __________________________________________________________________________________________
 # MAKE IMPORTED CLASSES TYPE-CHECKABLE (HACK)
-class DataFrame(pd.DataFrame): pass
+# class DataFrame(pd.DataFrame): pass
 
 # __________________________________________________________________________________________
 # FUNCTIONAL DATA STRUCTURES
@@ -24,14 +25,14 @@ class Printable:
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def __asString__(self) -> str:
+    def _asString(self) -> str:
         raise NotImplementedError
 
     def __str__(self) -> str:
-        return self.__asString__()
+        return self._asString()
     
     def __repr__(self):
-        return self.__asString__()
+        return self._asString()
 
 class CumulativeMonoidSet(Printable, Monoid):
     # dictionary that implements following traits:
@@ -39,9 +40,9 @@ class CumulativeMonoidSet(Printable, Monoid):
     # - (implied) no duplicate keys can exist
     # - all values must be a Monoid
     def __init__(self, value: List[Monoid] = []) -> None:
-        self.__value: Dict[str, Monoid] = self.__listToTypeSet(value)
+        self.__value: Dict[str, Monoid] = self._listToTypeSet(value)
     
-    def __listToTypeSet(self, monoid_list: List[Monoid]) -> Dict[str, Monoid]:
+    def _listToTypeSet(self, monoid_list: List[Monoid]) -> Dict[str, Monoid]:
         new_typeset: Dict[str, Monoid] = {}
         for monoid_value in monoid_list:
             # key = str(type(monoid_value))
@@ -50,7 +51,7 @@ class CumulativeMonoidSet(Printable, Monoid):
             new_typeset[key] = new_typeset[key] + monoid_value if key in existing_keys else monoid_value
         return new_typeset
 
-    def __asString__(self) -> str:
+    def _asString(self) -> str:
         data = self.getValue()
         if(len(data) == 0): return "<empty>"
         return "\n\n".join([str(type_key) + ":\n" + str(data[type_key]) for type_key in data.keys()])
@@ -122,20 +123,20 @@ class StrictDataFrame(Printable):
         column_order: List[str] = [name for name, _ in columns]
         
         self.__value: DataFrame = dataframe  
-        self.__index: TypeDict = self.__inferTypeDict(names=names, dataframe=dataframe) 
+        self.__index: TypeDict = self._inferTypeDict(names=names, dataframe=dataframe) 
         
         if(len(names) == 0 and len(dataframe) == 0):
             # scenario 0A or 0B (same treatment)
             self.__value = dataframe
         elif(len(names) > 0 and len(dataframe) == 0):
             # scenario 1
-            self.__value = self.__buildValueFromNames(index=self.__index)
+            self.__value = self._buildValueFromNames(index=self.__index)
         elif(len(names) == 0 and len(dataframe) > 0):
             # scenario 2
             self.__value = dataframe
         else:
             # scenario 3
-            self.__value = self.__buildValueFromNamesAndDataframe(index=self.__index, dataframe=dataframe)
+            self.__value = self._buildValueFromNamesAndDataframe(index=self.__index, dataframe=dataframe)
         
         if(len(column_order) > 0):
             # if column order is defined, sort columns of underlying dataframe
@@ -143,10 +144,10 @@ class StrictDataFrame(Printable):
             remaining_names = np.setdiff1d(list(names),ordered_names).tolist()
             self.__value = self.__value.reindex(ordered_names + remaining_names, axis=1)
 
-    def __indexToNames(self, index: TypeDict) -> StringSet:
+    def _indexToNames(self, index: TypeDict) -> StringSet:
         return set(index.keys())
 
-    def __inferTypeDict(self, names: TypeDict, dataframe: DataFrame) -> TypeDict:
+    def _inferTypeDict(self, names: TypeDict, dataframe: DataFrame) -> TypeDict:
 
         if(len(names) == 0):
             # if names are not defined, infer names & types from dataframe
@@ -157,24 +158,24 @@ class StrictDataFrame(Printable):
             # is TypeDict, statically type name as TypeDict
             return names
     
-    def __castColumnTypes(self, index: TypeDict, dataframe: DataFrame) -> DataFrame:
+    def _castColumnTypes(self, index: TypeDict, dataframe: DataFrame) -> DataFrame:
         for colname in index.keys():
             dataframe[[colname]] = dataframe[[colname]].apply(lambda ls: ls.astype(index[colname]))
         return dataframe
 
-    def __buildValueFromNames(self, index: TypeDict) -> DataFrame:
-        return self.__castColumnTypes(
+    def _buildValueFromNames(self, index: TypeDict) -> DataFrame:
+        return self._castColumnTypes(
             index = index, 
-            dataframe = DataFrame(columns=self.__indexToNames(index))
+            dataframe = DataFrame(columns=self._indexToNames(index))
         )
         
-    def __buildValueFromNamesAndDataframe(self, index: TypeDict, dataframe: DataFrame) -> DataFrame:
-        names: StringSet = self.__indexToNames(index)
+    def _buildValueFromNamesAndDataframe(self, index: TypeDict, dataframe: DataFrame) -> DataFrame:
+        names: StringSet = self._indexToNames(index)
         extracted_names = pd.Series(list(dataframe))
         matching_names = extracted_names[extracted_names.isin(names)]
-        df_names = self.__castColumnTypes(
+        df_names = self._castColumnTypes(
             index = index, 
-            dataframe = self.__buildValueFromNames(index = index)
+            dataframe = self._buildValueFromNames(index = index)
         )
         df_data = dataframe[matching_names] if len(matching_names) > 0 else DataFrame()
         return pd.concat([df_names,df_data], sort=True)
@@ -186,7 +187,7 @@ class StrictDataFrame(Printable):
         return [(name, self.__index[name]) for name in self.__index]
 
     def getNames(self) -> StringSet:
-        return self.__indexToNames(self.__index)
+        return self._indexToNames(self.__index)
     
     def getValue(self) -> DataFrame:
         return self.__value
@@ -198,7 +199,7 @@ class StrictDataFrame(Printable):
             dataframe = self.getValue().append(other.getValue(), sort=True)
         )
     
-    def __asString__(self) -> str:
+    def _asString(self) -> str:
         return "StrictDataFrame:\n" + str(self.getValue())
 
 class HasStrictDataframe(Printable):
@@ -218,7 +219,7 @@ class HasStrictDataframe(Printable):
     def getNames(self) -> StringSet:
         return self.__value.getNames()
     
-    def __asString__(self) -> str:
+    def _asString(self) -> str:
         return self.__classname + ":\n" + str(self.getValue())
 
     def _appendInternal(self, other: 'HasStrictDataframe') -> DataFrame:
